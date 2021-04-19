@@ -35,9 +35,9 @@ class GDNetHost : public Reference {
 
 	PENetHost* _host;
 	volatile bool _running;
-	Thread* _thread;
-	Mutex* _accessMutex;
-	Mutex* _hostMutex;
+	Thread _thread;
+	Mutex _accessMutex;
+	Mutex _hostMutex;
 
 	int _event_wait;
 	int _max_peers;

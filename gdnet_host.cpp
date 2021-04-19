@@ -3,9 +3,6 @@
 GDNetHost::GDNetHost() :
 	_host(NULL),
 	_running(false),
-	_thread(NULL),
-	_accessMutex(NULL),
-	_hostMutex(NULL),
 	_event_wait(DEFAULT_EVENT_WAIT),
 	_max_peers(DEFAULT_MAX_PEERS),
 	_max_channels(DEFAULT_MAX_CHANNELS),
@@ -15,24 +12,15 @@ GDNetHost::GDNetHost() :
 
 void GDNetHost::thread_start() {
 	_running = true;
-	_accessMutex = Mutex::create();
-	_hostMutex = Mutex::create();
-	_thread = Thread::create(thread_callback, this);
+	Thread::Settings s;
+	s.priority = (Thread::Priority)PTHREAD_PRIO_INHERIT;
+	_thread.start(thread_callback, this, s);
 }
 
 void GDNetHost::thread_stop() {
 	_running = false;
 
-	Thread::wait_to_finish(_thread);
-
-	memdelete(_thread);
-	_thread = NULL;
-
-	memdelete(_accessMutex);
-	_accessMutex = NULL;
-
-	memdelete(_hostMutex);
-	_hostMutex = NULL;
+	_thread.wait_to_finish();
 }
 
 void GDNetHost::thread_callback(void *instance) {
@@ -40,13 +28,13 @@ void GDNetHost::thread_callback(void *instance) {
 }
 
 void GDNetHost::acquireMutex() {
-	_accessMutex->lock();
-	_hostMutex->lock();
-	_accessMutex->unlock();
+	_accessMutex.lock();
+	_hostMutex.lock();
+	_accessMutex.unlock();
 }
 
 void GDNetHost::releaseMutex() {
-	_hostMutex->unlock();
+	_hostMutex.unlock();
 }
 
 int GDNetHost::get_peer_id(PENetPeer* peer) {
@@ -180,8 +168,7 @@ Error GDNetHost::bind(Ref<GDNetAddress> addr) {
 			penet_addr.host = PENET_HOST_ANY;
 		} else {
 			if (penet_address_set_host(&penet_addr, host_addr.get_data()) != 0) {
-				ERR_EXPLAIN("Unable to resolve host");
-				return FAILED;
+				ERR_FAIL_COND_V_MSG("penet_address_set_host(...) != 0", FAILED,"Unable to resolve host");
 			}
 		}
 
@@ -215,8 +202,7 @@ Ref<GDNetPeer> GDNetHost::host_connect(Ref<GDNetAddress> addr, int data) {
 	CharString host_addr = addr->get_host().ascii();
 
 	if (penet_address_set_host(&penet_addr, host_addr.get_data()) != 0) {
-		ERR_EXPLAIN("Unable to resolve host");
-		return NULL;
+		ERR_FAIL_COND_V_MSG("penet_address_set_host(...) != 0",NULL,"Unable to resolve host");
 	}
 
 	PENetPeer* peer = penet_host_connect(_host, &penet_addr, _max_channels, data);
